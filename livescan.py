@@ -75,7 +75,7 @@ from tkinter import ttk
 
 # Steht auch im Info.plist des Bündels. setup.py liest sie von hier,
 # damit sie nicht an zwei Stellen auseinanderläuft; pruefung.py wacht darüber.
-VERSION = "1.9.4"
+VERSION = "1.10.0"
 
 # Auf welchem System laufen wir? Der Mac-Weg bleibt unangetastet; fuer
 # Windows stehen daneben eigene Zweige. Alles andere (Linux) faellt auf den
@@ -401,6 +401,36 @@ class Instanz:
         except Fehler:
             return {}
 
+    def einstellungen(self) -> dict:
+        """Währung und Schalter des Kontos (`/api/config`), zehn Minuten
+        gemerkt – dieselben, nach denen die App ihre Preise zeigt."""
+        jetzt = time.time()
+        if getattr(self, "_einst_bis", 0.0) > jetzt:
+            return self._einst
+        try:
+            self._einst = self._anfrage("/api/config") or {}
+        except Fehler:
+            self._einst = getattr(self, "_einst", None) or {}
+        self._einst_bis = jetzt + 600
+        return self._einst
+
+    def preise(self, typ: str, nummer: str) -> dict:
+        """Die volle Preisangabe, wie sie der Steckbrief der App zeigt.
+
+        Je Zustand Ø, Spanne, Verkaufszahl und Gebiet – und, wenn im Konto
+        „Angebotspreise“ eingeschaltet ist, das billigste aktuelle Angebot.
+        Die Instanz antwortet aus ihrem Zwischenspeicher; nur die Angebote
+        kosten zwei BrickLink-Abrufe, und die holt sie nur auf Verlangen.
+        """
+        weg = (f"/api/price/{urllib.parse.quote(typ or 'minifig')}/"
+               f"{urllib.parse.quote(nummer)}")
+        if self.einstellungen().get("angebotspreise"):
+            weg += "?angebote=1"
+        try:
+            return self._anfrage(weg) or {}
+        except Fehler:
+            return {}
+
     def sets_der_figur(self, item_id: str) -> list:
         """In welchen Sets kam diese Figur heraus?
 
@@ -690,6 +720,78 @@ def _schon_da(info: dict) -> bool:
 def _versiegelte_sets(info: dict) -> list:
     """Eigene Sets, die **neu** sind – dort steckt die Figur noch drin."""
     return [s for s in _eigene_sets(info) if s[3] == "new"]
+
+
+# ------------------------------------------------------------ Preise
+# Dieselbe Anzeige wie im Steckbrief der App (seit 2.90.18): links ein gelbes
+# Schild „Neu“/„Gebraucht“, daneben der Ø fett mit der Spanne, darunter
+# eingerückt die Verkaufszahl mit dem Gebiet, aus dem der Preis stammt. Das
+# Fenster des Scanners ist schmal – also gleich die Handy-Form der App, in
+# der die Verkaufszahl immer eine eigene Zeile bekommt.
+REGION_FLAGGE = {"": "🌍", "DE": "🇩🇪", "AT": "🇦🇹", "CH": "🇨🇭",
+                 "europe": "🇪🇺"}
+# Windows hat keine Flaggen in seiner Emoji-Schrift – dort stünden zwei
+# Buchstaben in Kästchen. Also gleich die Buchstaben.
+REGION_KURZ = {"": "weltweit", "DE": "DE", "AT": "AT", "CH": "CH",
+               "europe": "EU"}
+WAEHRUNG_ZEICHEN = {"EUR": "€", "GBP": "£", "USD": "$", "CHF": "CHF"}
+
+
+def geld(wert, waehrung: str = "EUR") -> str:
+    """„1.234,56 €“ – die Instanz schickt die Beträge als Text („265.0000“)."""
+    try:
+        zahl = float(wert)
+    except (TypeError, ValueError):
+        return "–"
+    text = f"{zahl:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
+    return f"{text} {WAEHRUNG_ZEICHEN.get(waehrung or 'EUR', waehrung)}"
+
+
+def gebiet(d: dict) -> str:
+    """Woher der Preis stammt – als Fahne, unter Windows als Kürzel."""
+    if not d or "used_scope" not in d:
+        return ""
+    wo = d.get("used_scope") or ""
+    if IST_WINDOWS:
+        return f"({REGION_KURZ.get(wo, wo)})"
+    return REGION_FLAGGE.get(wo, "🌍")
+
+
+def preis_zeilen(p: dict, waehrung: str = "EUR") -> list:
+    """Die Zeilen des Preisblocks: `(schild, fett, dahinter, darunter, art)`.
+
+    `art` ist „verkauf“ oder „angebot“. Ohne Verkäufe steht „keine Verkäufe“
+    da wie in der App – eine fehlende Zeile sähe aus wie ein Ladefehler.
+    """
+    zeilen = []
+    for schild, schluessel in (("Neu", "new"), ("Gebraucht", "used")):
+        d = (p or {}).get(schluessel) or {}
+        if not d.get("avg"):
+            zeilen.append((schild, "", "keine Verkäufe", "", "verkauf"))
+            continue
+        spanne = ""
+        if d.get("min") is not None and d.get("max") is not None:
+            spanne = f"({geld(d['min'], waehrung)} – {geld(d['max'], waehrung)})"
+        unten = []
+        if d.get("times_sold") is not None:
+            unten.append(f"{d['times_sold']}× verkauft")
+        if gebiet(d):
+            unten.append(gebiet(d))
+        zeilen.append((schild, f"Ø {geld(d['avg'], waehrung)}", spanne,
+                       "\u00a0".join(unten), "verkauf"))
+    lager = (p or {}).get("stock") or {}
+    for schild, schluessel in (("Neu", "new"), ("Gebraucht", "used")):
+        d = lager.get(schluessel) or {}
+        if d.get("min") is None:
+            continue
+        unten = []
+        if d.get("angebote"):
+            unten.append(f"{d['angebote']} im Angebot")
+        if gebiet(d):
+            unten.append(gebiet(d))
+        zeilen.append((schild, f"ab {geld(d['min'], waehrung)}", "",
+                       "\u00a0".join(unten), "angebot"))
+    return zeilen
 
 
 def _besitz_zeile(info: dict) -> dict:
@@ -2497,6 +2599,11 @@ class LiveScanner:
         self.name.pack(fill="x", pady=(6, 0))
         self.unter = ttk.Label(r, text="", foreground=FARBEN["kraeftig"])
         self.unter.pack(fill="x", pady=(2, 0))
+        # Die Preise wie im Steckbrief der App – gefüllt, sobald die
+        # Instanz sie liefert (`_preise_zeigen`). Leer nimmt er keinen Platz.
+        self.preisblock = ttk.Frame(r)
+        self.preisblock.pack(fill="x", pady=(4, 0))
+        self.preisblock.columnconfigure(1, weight=1)
         self.besitz = ttk.Label(r, text="", font=("Helvetica", 12, "bold"))
         self.besitz.pack(fill="x", pady=(4, 0))
         # Zweite Zeile, weil sie eine andere Frage beantwortet: Die erste
@@ -4182,7 +4289,15 @@ class LiveScanner:
                 sets = self.instanz.sets_der_figur(treffer["item_id"])
                 if sets:
                     zusatz["all_sets"] = sets
-            if zusatz:
+            # Die volle Preisangabe wie im Steckbrief der App. Kommt sie
+            # nicht (Instanz ohne BrickLink, Fehler), bleibt die kurze Zeile.
+            preise = self.instanz.preise(treffer.get("item_type") or "minifig",
+                                         treffer["item_id"])
+            if preise.get("new") or preise.get("used"):
+                treffer["_preise"] = preise
+                treffer["_waehrung"] = (self.instanz.einstellungen()
+                                        .get("currency") or "EUR")
+            if zusatz or treffer.get("_preise"):
                 treffer["_info"] = {**(treffer.get("_info") or {}), **zusatz}
                 self.post.put(("fuer", (treffer, "treffer", treffer)))
             else:
@@ -4209,6 +4324,7 @@ class LiveScanner:
         self.name.config(text="—")
         for label in (self.unter, self.besitz, self.woanders, self.setliste):
             label.config(text="")
+        self._preise_zeigen(None)
         self._referenzbild = None
         self._referenz_roh = None
         self.referenz.config(image="", text="—", foreground=FARBEN["still"],
@@ -4217,6 +4333,48 @@ class LiveScanner:
         for k in (self.k_sammlung, self.k_merken, self.k_liste):
             k.config(state="disabled")
         self._stern_setzen(False)
+
+    def _preise_zeigen(self, preise, waehrung: str = "EUR"):
+        """Den Preisblock füllen – oder leeren, wenn es (noch) keine gibt."""
+        for kind in self.preisblock.winfo_children():
+            kind.destroy()
+        if not preise:
+            return
+        zeilen = preis_zeilen(preise, waehrung)
+        reihe = 0
+        for schild, fett, dahinter, darunter, art in zeilen:
+            # Das Schild in festen Farben: Gelb mit dunkler Schrift ist in
+            # beiden Modi lesbar, und so steht es auch in der App. Angebote
+            # blasser – es ist eine andere Zahl als der Verkaufspreis.
+            tk.Label(self.preisblock, text=schild,
+                     font=("Helvetica", 10, "bold"),
+                     background="#FFD500" if art == "verkauf" else "#FFF0A0",
+                     foreground="#1D1D1B", padx=6, pady=0).grid(
+                row=reihe, column=0, sticky="nw", padx=(0, 8), pady=(2, 0))
+            oben = ttk.Frame(self.preisblock)
+            oben.grid(row=reihe, column=1, sticky="w", pady=(1, 0))
+            if fett:
+                ttk.Label(oben, text=fett, font=("Helvetica", 12, "bold"),
+                          foreground=FARBEN["klar"]).pack(side="left")
+            if dahinter:
+                ttk.Label(oben, text=dahinter,
+                          foreground=FARBEN["leise" if not fett else "kraeftig"]
+                          ).pack(side="left", padx=(6 if fett else 0, 0))
+            reihe += 1
+            if darunter:
+                ttk.Label(self.preisblock, text=darunter,
+                          foreground=FARBEN["leise"]).grid(
+                    row=reihe, column=1, sticky="w")
+                reihe += 1
+        hinweis = "Ø-Verkaufspreise, letzte 6 Monate (BrickLink)"
+        if any(z[4] == "angebot" for z in zeilen):
+            hinweis += " · „ab“: billigstes Angebot gerade jetzt"
+        ttk.Label(self.preisblock, text=hinweis, foreground=FARBEN["matt"],
+                  font=("Helvetica", 10),
+                  wraplength=getattr(self, "_letzte_breite", 330)
+                  ).grid(row=reihe, column=0,
+                                               columnspan=2, sticky="w",
+                                               pady=(3, 0))
 
     def _stern_setzen(self, gemerkt: bool):
         """☆ oder ★ – steht die Figur schon auf der Wunschliste?"""
@@ -4239,11 +4397,15 @@ class LiveScanner:
                  else f"{treffer.get('score', '?')} % sicher"]
         if info.get("year"):
             teile.append(str(info["year"]))
-        for label, schluessel in (("Ø neu", "new"), ("Ø gebr.", "used")):
-            wert = info.get(schluessel)
-            if wert is not None:
-                teile.append(f"{label} {wert:.2f} €")
+        preise = treffer.get("_preise")
+        if not preise:
+            # Bis die vollen Preise da sind, die kurze Form wie bisher.
+            for label, schluessel in (("Ø neu", "new"), ("Ø gebr.", "used")):
+                wert = info.get(schluessel)
+                if wert is not None:
+                    teile.append(f"{label} {geld(wert)}")
         self.unter.config(text="  ·  ".join(teile))
+        self._preise_zeigen(preise, treffer.get("_waehrung") or "EUR")
         self.besitz.config(**_besitz_zeile(info))
         # „Habe ich das schon?" hat mehr als eine Antwort: Wunschliste,
         # Einkaufsliste und die eigenen Sets zählen genauso. Alles davon

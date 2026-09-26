@@ -48,6 +48,19 @@ class Attrappe:
         return {t["item_id"]: dict(INFO.get(t["item_id"], {}))
                 for t in artikel}
 
+    # Die volle Preisangabe wie aus /api/price – Beträge als Text.
+    einstellungen = lambda self: {"currency": "EUR", "angebotspreise": True}
+
+    def preise(self, typ, nummer):
+        return {
+            "new": {"min": "4.50", "avg": "5.95", "max": "7.99",
+                    "times_sold": 13, "used_scope": "DE"},
+            "used": {"min": "2.10", "avg": "3.70", "max": "5.49",
+                     "times_sold": 41, "used_scope": "DE"},
+            "stock": {"used": {"min": "2.99", "angebote": 18,
+                               "used_scope": "DE"}},
+        }
+
 
 def _abbild(wurzel, ziel):
     wurzel.update_idletasks()

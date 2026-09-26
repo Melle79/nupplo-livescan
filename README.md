@@ -23,6 +23,8 @@ der App, genau wie es der Browser tut:
 | `POST /api/login` | einmal anmelden, Token merken |
 | `POST /api/scan` | den Ausschnitt erkennen lassen |
 | `POST /api/suggest_info` | Jahr, Ø-Preise, „wie oft habt ihr das schon" |
+| `GET /api/price/{typ}/{nr}` | die vollen Preise wie im Steckbrief der App |
+| `GET /api/config` | Währung und ob „Angebotspreise“ eingeschaltet ist |
 | `POST /api/collection` | ＋ Zur Sammlung |
 | `POST /api/wanted` | ☆ (Merken) |
 | `GET/POST /api/lists…` | 🛒 auf eine Einkaufsliste |
@@ -172,6 +174,27 @@ an, blinkt es auch für sie.
 **🔔 Ton bei Wunschliste** neben dem Foto-Haken schaltet den Ton ab; das
 Blinken bleibt. Beim Einschalten spielt er einmal, damit ihr die Lautstärke
 hört, bevor es darauf ankommt.
+
+### Die Preise
+
+Unter dem Namen stehen die Preise so wie im Steckbrief der App:
+
+```
+[Neu]        Ø 5,95 €  (4,50 € – 7,99 €)
+             13× verkauft 🇩🇪
+[Gebraucht]  Ø 3,70 €  (2,10 € – 5,49 €)
+             41× verkauft 🇩🇪
+[Gebraucht]  ab 2,99 €
+             18 im Angebot 🇩🇪
+```
+
+Ø ist der Durchschnitt der Verkäufe der letzten sechs Monate bei BrickLink,
+dahinter die Spanne. Die Fahne sagt, aus welchem Gebiet der Preis stammt –
+unter Windows steht dort ein Kürzel wie `(DE)`, weil Windows keine
+Flaggen-Zeichen kennt. Die blassere **„ab“-Zeile** ist das billigste
+Angebot gerade jetzt, kein Verkaufswert; sie erscheint nur, wenn in der App
+unter Mehr → Angebotspreise eingeschaltet ist. Bis die vollen Preise da sind,
+steht die kurze Form („Ø neu … · Ø gebr. …“) in der Zeile mit der Nummer.
 
 ### Habt ihr das schon?
 

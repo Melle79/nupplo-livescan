@@ -80,6 +80,8 @@ class Attrappe:
     sets_der_figur = lambda self, i: []
     listen = lambda self: []
     infos = lambda self, a, bei_bricklink=False: dict(bestand)
+    preise = lambda self, typ, nummer: {}
+    einstellungen = lambda self: {}
 
     def erkennen(self, bild):
         geschickt.append(bild)
@@ -175,7 +177,7 @@ pruefe(app.treffer["item_id"] == "sw0579",
 app.treffer["_info"] = {"used": 7.25}
 app.post.put(("fuer", (app.treffer, "treffer", app.treffer)))
 takt(wurzel)
-pruefe("7.25" in app.unter.cget("text"),
+pruefe("7,25" in app.unter.cget("text"),
        "der Preis für den aktuellen Treffer kommt aber an")
 
 # ==================================================== 2. Ansichten vereinen
@@ -2125,6 +2127,60 @@ app.automatik.set(False)
 app.empfindlich._geklickt(type("K", (), {"x": app.empfindlich._rand + 1})())
 pruefe(app.empfindlich.get() == list(livescan.EMPFINDLICHKEIT)[0],
        "blass ist sie trotzdem wählbar – vor dem Einschalten")
+wurzel.destroy()
+
+# ================================ Preise wie im Steckbrief der App
+abschnitt("16. Preise stehen wie im Steckbrief der App")
+ECHT = {   # so antwortet /api/price – Beträge als Text
+    "new": {"min": "260.0000", "avg": "265.0000", "max": "270.0000",
+            "times_sold": 2, "used_scope": "DE", "fell_back": False},
+    "used": {"min": "203.3720", "avg": "1264.0165", "max": "1329.9500",
+             "times_sold": 7, "used_scope": "europe", "fell_back": True},
+    "stock": {"used": {"min": "189.99", "angebote": 4, "used_scope": "DE"}},
+}
+pruefe(livescan.geld("1264.0165") == "1.264,02 €", "Beträge deutsch: 1.264,02 €")
+pruefe(livescan.geld(3, "GBP") == "3,00 £", "Währung aus dem Konto")
+zeilen = livescan.preis_zeilen(ECHT)
+pruefe([z[0] for z in zeilen] == ["Neu", "Gebraucht", "Gebraucht"],
+       "Neu, Gebraucht und eine Angebotszeile")
+pruefe(zeilen[0][1] == "Ø 265,00 €" and zeilen[0][2] == "(260,00 € – 270,00 €)",
+       "Ø fett, Spanne dahinter")
+flagge = "(DE)" if livescan.IST_WINDOWS else "🇩🇪"
+pruefe(zeilen[0][3] == "2× verkauft\u00a0" + flagge,
+       "Verkaufszahl mit Gebiet, fest verbunden")
+pruefe(zeilen[2][1] == "ab 189,99 €" and zeilen[2][4] == "angebot",
+       "Angebot: „ab“ und blasseres Schild")
+pruefe(livescan.preis_zeilen({"new": {}, "used": {"avg": "5"}})[0][2]
+       == "keine Verkäufe", "ohne Verkäufe steht es da")
+
+class MitPreisen(Attrappe):
+    preise = lambda self, typ, nummer: dict(ECHT)
+    einstellungen = lambda self: {"currency": "EUR"}
+
+wurzel, app = fenster()
+app.instanz = MitPreisen()
+t = artikel("sw0547", 91, "Darth Revan", new=265.0, used=264.02)
+app.gewaehlt = t        # wie nach einem Scan: Antworten gelten nur ihm
+app._treffer_zeigen(t)
+pruefe("Ø neu" in app.unter.cget("text"), "vor den vollen Preisen: die kurze Zeile")
+app._preis_nachfragen(t)
+takt(wurzel, 600)
+pruefe(t.get("_preise") is not None, "volle Preise geholt")
+pruefe("Ø neu" not in app.unter.cget("text"),
+       "danach steht der Ø nicht doppelt in der Unterzeile")
+texte = []
+def sammeln(w):
+    for k in w.winfo_children():
+        try:
+            texte.append(str(k.cget("text")))
+        except Exception:
+            pass
+        sammeln(k)
+sammeln(app.preisblock)
+pruefe("Ø 265,00 €" in texte and "Neu" in texte and "Gebraucht" in texte,
+       "Schild und Preis stehen in der Karte")
+app._treffer_leeren()
+pruefe(not app.preisblock.winfo_children(), "nächster Treffer: der Block ist leer")
 wurzel.destroy()
 
 # ============================================================ Bilanz
