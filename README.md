@@ -180,21 +180,20 @@ hört, bevor es darauf ankommt.
 Unter dem Namen stehen die Preise so wie im Steckbrief der App:
 
 ```
-[Neu]        Ø 5,95 €  (4,50 € – 7,99 €)
-             13× verkauft 🇩🇪
-[Gebraucht]  Ø 3,70 €  (2,10 € – 5,49 €)
-             41× verkauft 🇩🇪
-[Gebraucht]  ab 2,99 €
-             18 im Angebot 🇩🇪
+[Neu]        Ø 5,95 €  (4,50 € – 7,99 €) · 13× verkauft 🇩🇪
+[Gebraucht]  Ø 3,70 €  (2,10 € – 5,49 €) · 41× verkauft 🇩🇪 · 18 im Angebot ab 2,99 € 🇩🇪
 ```
 
-Ø ist der Durchschnitt der Verkäufe der letzten sechs Monate bei BrickLink,
-dahinter die Spanne. Die Fahne sagt, aus welchem Gebiet der Preis stammt –
-unter Windows steht dort ein Kürzel wie `(DE)`, weil Windows keine
-Flaggen-Zeichen kennt. Die blassere **„ab“-Zeile** ist das billigste
-Angebot gerade jetzt, kein Verkaufswert; sie erscheint nur, wenn in der App
-unter Mehr → Angebotspreise eingeschaltet ist. Bis die vollen Preise da sind,
-steht die kurze Form („Ø neu … · Ø gebr. …“) in der Zeile mit der Nummer.
+Je Zustand **eine Zeile**; umgebrochen wird nur, wenn das Fenster zu schmal
+ist, und dann eingerückt neben dem Schild. Ø ist der Durchschnitt der
+Verkäufe der letzten sechs Monate bei BrickLink, dahinter die Spanne – sie
+fällt weg, wenn beide Enden gleich sind. Die Fahne sagt, aus welchem Gebiet
+der Preis stammt; unter Windows steht dort ein Kürzel wie `(DE)`, weil
+Windows keine Flaggen-Zeichen kennt. **„im Angebot ab“** ist das billigste
+Angebot gerade jetzt, kein Verkaufswert; es erscheint nur, wenn in der App
+unter Mehr → Angebotspreise eingeschaltet ist. Bis die vollen Preise da
+sind, steht die kurze Form („Ø neu … · Ø gebr. …“) in der Zeile mit der
+Nummer.
 
 ### Habt ihr das schon?
 

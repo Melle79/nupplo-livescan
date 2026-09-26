@@ -75,7 +75,7 @@ from tkinter import ttk
 
 # Steht auch im Info.plist des Bündels. setup.py liest sie von hier,
 # damit sie nicht an zwei Stellen auseinanderläuft; pruefung.py wacht darüber.
-VERSION = "1.10.0"
+VERSION = "1.10.1"
 
 # Auf welchem System laufen wir? Der Mac-Weg bleibt unangetastet; fuer
 # Windows stehen daneben eigene Zweige. Alles andere (Linux) faellt auf den
@@ -744,7 +744,8 @@ def geld(wert, waehrung: str = "EUR") -> str:
     except (TypeError, ValueError):
         return "–"
     text = f"{zahl:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
-    return f"{text} {WAEHRUNG_ZEICHEN.get(waehrung or 'EUR', waehrung)}"
+    # Festes Leerzeichen: Betrag und Währung trennt kein Umbruch.
+    return f"{text}\u00a0{WAEHRUNG_ZEICHEN.get(waehrung or 'EUR', waehrung)}"
 
 
 def gebiet(d: dict) -> str:
@@ -758,39 +759,46 @@ def gebiet(d: dict) -> str:
 
 
 def preis_zeilen(p: dict, waehrung: str = "EUR") -> list:
-    """Die Zeilen des Preisblocks: `(schild, fett, dahinter, darunter, art)`.
+    """Je Zustand **eine** Zeile: `(schild, fett, rest)`.
 
-    `art` ist „verkauf“ oder „angebot“. Ohne Verkäufe steht „keine Verkäufe“
-    da wie in der App – eine fehlende Zeile sähe aus wie ein Ladefehler.
+    Erst standen Verkaufszahl und Angebot jeweils eingerückt darunter – vier
+    Stockwerke je Figur, im breiten Fenster links eine schmale Säule und
+    rechts nichts (Rückmeldung am 27.09.2026). Jetzt alles nebeneinander;
+    umgebrochen wird nur, wenn das Fenster wirklich zu schmal ist.
+
+    Die Spanne entfällt, wenn beide Enden gleich sind: „(324,90 € – 324,90 €)“
+    bei einem einzigen Verkauf sagt nichts. Das Angebot heißt ausdrücklich
+    „im Angebot ab“ – bloß „ab“ direkt hinter dem Ø läse man als Spanne.
     """
     zeilen = []
-    for schild, schluessel in (("Neu", "new"), ("Gebraucht", "used")):
-        d = (p or {}).get(schluessel) or {}
-        if not d.get("avg"):
-            zeilen.append((schild, "", "keine Verkäufe", "", "verkauf"))
-            continue
-        spanne = ""
-        if d.get("min") is not None and d.get("max") is not None:
-            spanne = f"({geld(d['min'], waehrung)} – {geld(d['max'], waehrung)})"
-        unten = []
-        if d.get("times_sold") is not None:
-            unten.append(f"{d['times_sold']}× verkauft")
-        if gebiet(d):
-            unten.append(gebiet(d))
-        zeilen.append((schild, f"Ø {geld(d['avg'], waehrung)}", spanne,
-                       "\u00a0".join(unten), "verkauf"))
     lager = (p or {}).get("stock") or {}
     for schild, schluessel in (("Neu", "new"), ("Gebraucht", "used")):
-        d = lager.get(schluessel) or {}
-        if d.get("min") is None:
-            continue
-        unten = []
-        if d.get("angebote"):
-            unten.append(f"{d['angebote']} im Angebot")
-        if gebiet(d):
-            unten.append(gebiet(d))
-        zeilen.append((schild, f"ab {geld(d['min'], waehrung)}", "",
-                       "\u00a0".join(unten), "angebot"))
+        d = (p or {}).get(schluessel) or {}
+        rest = []
+        if d.get("avg"):
+            fett = f"Ø {geld(d['avg'], waehrung)}"
+            if d.get("min") is not None and d.get("max") is not None:
+                von, bis = geld(d["min"], waehrung), geld(d["max"], waehrung)
+                if von != bis:
+                    rest.append(f"({von} – {bis})")
+            verkauft = [f"{d['times_sold']}× verkauft"] \
+                if d.get("times_sold") is not None else []
+            if gebiet(d):
+                verkauft.append(gebiet(d))
+            if verkauft:
+                rest.append("· " + "\u00a0".join(verkauft))
+        else:
+            fett = ""
+            rest.append("keine Verkäufe")
+        a = lager.get(schluessel) or {}
+        if a.get("min") is not None:
+            menge = f"{a['angebote']}\u00a0" if a.get("angebote") else ""
+            # Als Ganzes umbrechen, nie „im Angebot / ab 2,99 €“.
+            teil = f"· {menge}im\u00a0Angebot\u00a0ab\u00a0{geld(a['min'], waehrung)}"
+            if gebiet(a):
+                teil += "\u00a0" + gebiet(a)
+            rest.append(teil)
+        zeilen.append((schild, fett, " ".join(rest)))
     return zeilen
 
 
@@ -2931,6 +2939,11 @@ class LiveScanner:
         self._letzte_breite = breite
         for label in self._breite_labels:
             label.config(wraplength=breite)
+        for label in getattr(self, "_preis_reste", []):
+            try:
+                label.config(wraplength=max(120, breite - 200))
+            except tk.TclError:
+                pass                     # zum vorigen Treffer, schon weg
 
     # ------------------------------------------------------- Wunschliste
     def _blinken_beenden(self, grundfarbe=None):
@@ -4341,40 +4354,37 @@ class LiveScanner:
         if not preise:
             return
         zeilen = preis_zeilen(preise, waehrung)
-        reihe = 0
-        for schild, fett, dahinter, darunter, art in zeilen:
+        breite = getattr(self, "_letzte_breite", 330)
+        self._preis_reste = []
+        for reihe, (schild, fett, rest) in enumerate(zeilen):
             # Das Schild in festen Farben: Gelb mit dunkler Schrift ist in
-            # beiden Modi lesbar, und so steht es auch in der App. Angebote
-            # blasser – es ist eine andere Zahl als der Verkaufspreis.
+            # beiden Modi lesbar, und so steht es auch in der App.
             tk.Label(self.preisblock, text=schild,
-                     font=("Helvetica", 10, "bold"),
-                     background="#FFD500" if art == "verkauf" else "#FFF0A0",
+                     font=("Helvetica", 10, "bold"), background="#FFD500",
                      foreground="#1D1D1B", padx=6, pady=0).grid(
                 row=reihe, column=0, sticky="nw", padx=(0, 8), pady=(2, 0))
-            oben = ttk.Frame(self.preisblock)
-            oben.grid(row=reihe, column=1, sticky="w", pady=(1, 0))
+            zeile = ttk.Frame(self.preisblock)
+            zeile.grid(row=reihe, column=1, sticky="w", pady=(1, 0))
             if fett:
-                ttk.Label(oben, text=fett, font=("Helvetica", 12, "bold"),
-                          foreground=FARBEN["klar"]).pack(side="left")
-            if dahinter:
-                ttk.Label(oben, text=dahinter,
-                          foreground=FARBEN["leise" if not fett else "kraeftig"]
-                          ).pack(side="left", padx=(6 if fett else 0, 0))
-            reihe += 1
-            if darunter:
-                ttk.Label(self.preisblock, text=darunter,
-                          foreground=FARBEN["leise"]).grid(
-                    row=reihe, column=1, sticky="w")
-                reihe += 1
-        hinweis = "Ø-Verkaufspreise, letzte 6 Monate (BrickLink)"
-        if any(z[4] == "angebot" for z in zeilen):
-            hinweis += " · „ab“: billigstes Angebot gerade jetzt"
-        ttk.Label(self.preisblock, text=hinweis, foreground=FARBEN["matt"],
-                  font=("Helvetica", 10),
-                  wraplength=getattr(self, "_letzte_breite", 330)
-                  ).grid(row=reihe, column=0,
-                                               columnspan=2, sticky="w",
-                                               pady=(3, 0))
+                ttk.Label(zeile, text=fett, font=("Helvetica", 12, "bold"),
+                          foreground=FARBEN["klar"]).pack(side="left",
+                                                          anchor="n")
+            if rest:
+                # Bricht nur um, wenn das Fenster zu schmal ist – die Breite
+                # zieht `_umbruch_anpassen` nach.
+                lbl = ttk.Label(zeile, text=rest, foreground=FARBEN["leise"],
+                                wraplength=max(120, breite - 200),
+                                justify="left")
+                lbl.pack(side="left", anchor="n", padx=(6 if fett else 0, 0),
+                         pady=(1, 0))
+                self._preis_reste.append(lbl)
+        ttk.Label(self.preisblock,
+                  text="Ø: Verkäufe der letzten 6 Monate (BrickLink) · "
+                       "„im Angebot ab“: billigstes Angebot gerade jetzt",
+                  foreground=FARBEN["matt"], font=("Helvetica", 10),
+                  wraplength=breite).grid(row=len(zeilen), column=0,
+                                          columnspan=2, sticky="w",
+                                          pady=(2, 0))
 
     def _stern_setzen(self, gemerkt: bool):
         """☆ oder ★ – steht die Figur schon auf der Wunschliste?"""

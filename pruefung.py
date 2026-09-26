@@ -2138,18 +2138,22 @@ ECHT = {   # so antwortet /api/price – Beträge als Text
              "times_sold": 7, "used_scope": "europe", "fell_back": True},
     "stock": {"used": {"min": "189.99", "angebote": 4, "used_scope": "DE"}},
 }
-pruefe(livescan.geld("1264.0165") == "1.264,02 €", "Beträge deutsch: 1.264,02 €")
-pruefe(livescan.geld(3, "GBP") == "3,00 £", "Währung aus dem Konto")
+pruefe(livescan.geld("1264.0165") == "1.264,02\u00a0€", "Beträge deutsch: 1.264,02\u00a0€")
+pruefe(livescan.geld(3, "GBP") == "3,00\u00a0£", "Währung aus dem Konto")
 zeilen = livescan.preis_zeilen(ECHT)
-pruefe([z[0] for z in zeilen] == ["Neu", "Gebraucht", "Gebraucht"],
-       "Neu, Gebraucht und eine Angebotszeile")
-pruefe(zeilen[0][1] == "Ø 265,00 €" and zeilen[0][2] == "(260,00 € – 270,00 €)",
-       "Ø fett, Spanne dahinter")
 flagge = "(DE)" if livescan.IST_WINDOWS else "🇩🇪"
-pruefe(zeilen[0][3] == "2× verkauft\u00a0" + flagge,
-       "Verkaufszahl mit Gebiet, fest verbunden")
-pruefe(zeilen[2][1] == "ab 189,99 €" and zeilen[2][4] == "angebot",
-       "Angebot: „ab“ und blasseres Schild")
+eu = "(EU)" if livescan.IST_WINDOWS else "🇪🇺"
+pruefe([z[0] for z in zeilen] == ["Neu", "Gebraucht"],
+       "je Zustand genau eine Zeile – nichts untereinander")
+pruefe(zeilen[0][1] == "Ø 265,00\u00a0€", "Ø fett")
+pruefe(zeilen[0][2] == "(260,00\u00a0€ – 270,00\u00a0€) · 2× verkauft\u00a0" + flagge,
+       "Spanne und Verkaufszahl mit Gebiet in derselben Zeile")
+pruefe(zeilen[1][2] == "(203,37\u00a0€ – 1.329,95\u00a0€) · 7× verkauft\u00a0" + eu
+       + " · 4\u00a0im\u00a0Angebot\u00a0ab\u00a0189,99\u00a0€\u00a0" + flagge,
+       "das Angebot hängt an der Gebraucht-Zeile, ausdrücklich „im Angebot ab“")
+einzeln = livescan.preis_zeilen({"new": {"min": "5", "avg": "5", "max": "5",
+                                          "times_sold": 1}})
+pruefe("–" not in einzeln[0][2], "gleiche Enden: keine Spanne")
 pruefe(livescan.preis_zeilen({"new": {}, "used": {"avg": "5"}})[0][2]
        == "keine Verkäufe", "ohne Verkäufe steht es da")
 
@@ -2177,7 +2181,7 @@ def sammeln(w):
             pass
         sammeln(k)
 sammeln(app.preisblock)
-pruefe("Ø 265,00 €" in texte and "Neu" in texte and "Gebraucht" in texte,
+pruefe("Ø 265,00\u00a0€" in texte and "Neu" in texte and "Gebraucht" in texte,
        "Schild und Preis stehen in der Karte")
 app._treffer_leeren()
 pruefe(not app.preisblock.winfo_children(), "nächster Treffer: der Block ist leer")
