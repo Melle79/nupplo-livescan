@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Brickfolio Live-Scanner – Ausschnitt vom Bildschirm an die App schicken.
+"""Nupplo Live-Scanner – Ausschnitt vom Bildschirm an die Instanz schicken.
 
 Gedacht für Auktions-Streams: Der Verkäufer hält eine Figur hoch, du ziehst
 einen Rahmen darum, und der Treffer steht mit Nummer, Ø-Preisen und
@@ -75,7 +75,7 @@ from tkinter import ttk
 
 # Steht auch im Info.plist des Bündels. setup.py liest sie von hier,
 # damit sie nicht an zwei Stellen auseinanderläuft; pruefung.py wacht darüber.
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 
 # Auf welchem System laufen wir? Der Mac-Weg bleibt unangetastet; fuer
 # Windows stehen daneben eigene Zweige. Alles andere (Linux) faellt auf den
@@ -184,7 +184,7 @@ _OEFFNER = urllib.request.build_opener(_KeineUmleitung)
 
 
 class Instanz:
-    """Die Verbindung zu einer Brickfolio-Instanz – über deren Schnittstelle,
+    """Die Verbindung zu einer Nupplo-SE-Instanz – über deren Schnittstelle,
     ohne irgendetwas über ihr Inneres anzunehmen."""
 
     def __init__(self, adresse: str = "", token: str = "",
@@ -2259,7 +2259,7 @@ class LiveScanner:
         # **Vor `_bauen`**, denn die Farben werden beim Anlegen der
         # Bedienelemente gelesen.
         farben_setzen(wurzel)
-        wurzel.title("Brickfolio Live-Scanner")
+        wurzel.title("Nupplo Live-Scanner")
         # Der Haken »Immer vorn« entscheidet; voreingestellt bleibt es an.
         wurzel.attributes("-topmost",
                           bool(self.daten.get("immer_vorn", True)))
@@ -2760,7 +2760,11 @@ class LiveScanner:
         def arbeiten():
             ordner = tempfile.mkdtemp(prefix="livescan-update-")
             try:
-                archiv = os.path.join(ordner, paket_name())
+                # Aus der gefundenen Adresse, nicht geraten: Sonst hiesse
+                # die Datei hier anders als das, was geladen wurde.
+                archiv = os.path.join(
+                    ordner, os.path.basename(paket.split("?")[0])
+                    or paket_namen()[0])
                 sagen("Lade …")
 
                 def fortschritt(geholt, ganz):
@@ -4682,15 +4686,42 @@ def neueste_ueber_seite(jetzt: str = "") -> tuple | None:
     if not kennung:
         return None
     seite = "https://github.com/%s/releases/tag/%s" % (REPO, kennung)
-    paket = "https://github.com/%s/releases/download/%s/%s" % (
-        REPO, kennung, paket_name())
-    code, _ = weiterleitung(paket, jetzt)
-    return kennung, seite, (paket if code in _WEITER or code == 200 else "")
+    # Der erste Name, der am Release wirklich hängt, gewinnt. Steht dort
+    # keiner von beiden, bleibt das Paket leer – dann meldet der Scanner
+    # die neue Fassung, bietet sie aber nicht zum Einspielen an.
+    gefunden = ""
+    for name in paket_namen():
+        paket = "https://github.com/%s/releases/download/%s/%s" % (
+            REPO, kennung, name)
+        code, _ = weiterleitung(paket, jetzt)
+        if code in _WEITER or code == 200:
+            gefunden = paket
+            break
+    return kennung, seite, gefunden
 
-def paket_name() -> str:
-    """Wie das Paket für dieses System im Release heißt."""
-    return ("Brickfolio-Live-Scanner-Windows-x64.zip" if IST_WINDOWS
-            else "Brickfolio-Live-Scanner-macOS-arm64.zip")
+def paket_namen() -> tuple:
+    """Wie das Paket für dieses System heißen kann – neuer Name zuerst.
+
+    **Der Grund für die Mehrzahl.** Die Adresse wird hier gebaut, nicht am
+    Release erfragt: Ein umbenanntes Paket ist für eine bestehende
+    Installation schlicht ein 404, und sie bliebe für immer auf ihrer
+    Fassung sitzen. Damit die Umbenennung von Brickfolio auf Nupplo ohne
+    Zurückgelassene abläuft, gilt die Reihenfolge:
+
+    1. Diese Fassung hier lernt **beide** Namen (sie erscheint noch unter
+       dem alten, damit alle sie bekommen).
+    2. Erst danach dürfen Veröffentlichungen den neuen Namen tragen – eine
+       Zeit lang beide.
+    3. Wenn niemand mehr auf einer älteren Fassung sitzt, fällt der alte
+       Name weg.
+
+    Wer diese Reihenfolge umdreht, schneidet jede ältere Installation von
+    der Selbsterneuerung ab; der Weg zurück führt dann nur über einen
+    Download von Hand samt Gatekeeper-Freigabe.
+    """
+    teil = "Windows-x64.zip" if IST_WINDOWS else "macOS-arm64.zip"
+    return ("Nupplo-Live-Scanner-%s" % teil,
+            "Brickfolio-Live-Scanner-%s" % teil)
 
 
 def eigener_ort(ausfuehrbar: str = "", art: object = "?") -> str:
@@ -4756,8 +4787,15 @@ def paket_pruefen(neu: str, alt: str) -> str:
     Sicherheit ist dieselbe wie beim Laden von Hand – HTTPS zu GitHub.
     """
     if IST_WINDOWS:
-        exe = os.path.join(neu, "Brickfolio Live-Scanner.exe")
-        return "" if os.path.exists(exe) else "Im Paket steckt kein Programm."
+        # **Nicht auf einen festen Namen prüfen.** Auf dem Mac sucht
+        # `paket_auspacken` irgendein `.app` im Paket; unter Windows stand
+        # hier ein fester Name. Sobald das Programm im Paket „Nupplo
+        # Live-Scanner.exe" heisst, haette diese Zeile jede Erneuerung mit
+        # „Im Paket steckt kein Programm." abgelehnt - und zwar bei jedem
+        # Windows-Nutzer gleichzeitig.
+        hat_programm = any(name.lower().endswith(".exe")
+                           for name in os.listdir(neu))
+        return "" if hat_programm else "Im Paket steckt kein Programm."
     try:
         fertig = subprocess.run(
             ["codesign", "--verify", "--deep", "--strict", neu],

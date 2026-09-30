@@ -1720,10 +1720,34 @@ try:
            "die Release-Seite nennt die neue Fassung")
     pruefe(_neu[1].endswith("/releases/tag/v9.9.9"), "samt Seite")
     pruefe(_neu[2].endswith("/releases/download/v9.9.9/"
-                            + livescan.paket_name()),
+                            + livescan.paket_namen()[0]),
            "und dem Paket für dieses System")
     pruefe(not any("api.github.com" in a for a in _gefragt),
            "die API wird nicht gefragt")
+    # Die Umbenennung von Brickfolio auf Nupplo: Hängt am Release nur noch
+    # der ALTE Name, muss die Selbsterneuerung ihn trotzdem finden. Ohne
+    # diesen Rückfall bliebe jede bestehende Installation auf ihrer Fassung
+    # sitzen, sobald die Pakete umbenannt sind.
+    _neuer, _alter = livescan.paket_namen()
+    _nur_alter = [False]
+
+    def _seite_nur_alter(adresse, jetzt=""):
+        _gefragt.append(adresse)
+        if adresse.endswith("/releases/latest"):
+            return 302, ("https://github.com/%s/releases/tag/v9.9.9"
+                         % livescan.REPO)
+        if adresse.endswith("/releases/download/v9.9.9/" + _alter):
+            return 302, ""
+        return 404, ""
+
+    livescan.weiterleitung = _seite_nur_alter
+    _rueck = livescan.neuere_fassung("1.9.0")
+    pruefe(_rueck is not None and _rueck[2].endswith(_alter),
+           "trägt das Release nur den alten Paketnamen, wird er gefunden")
+    pruefe(_neuer != _alter and _neuer.startswith("Nupplo-"),
+           "und der neue Name wird zuerst versucht")
+    livescan.weiterleitung = _seite
+
     _mit_paket = False
     pruefe(livescan.neuere_fassung("1.9.0")[2] == "",
            "hängt das Paket noch nicht dran, bleibt es leer statt zu scheitern")

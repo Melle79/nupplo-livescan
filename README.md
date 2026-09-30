@@ -1,4 +1,4 @@
-# Brickfolio Live-Scanner
+# Nupplo Live-Scanner
 
 Ein kleines Fenster, das über allem liegt. Rahmen um die Figur ziehen,
 fertig – der Treffer steht mit Nummer, Ø-Preisen und „habt ihr schon" da,
@@ -15,7 +15,7 @@ Läuft auf **macOS** (Apple Silicon) und auf **Windows**.
 
 ## Es gehört nicht zur App
 
-Brickfolio bleibt unberührt. Dieses Programm benutzt nur die **Schnittstelle**
+Nupplo SE bleibt unberührt. Dieses Programm benutzt nur die **Schnittstelle**
 der App, genau wie es der Browser tut:
 
 | Weg | wofür |
@@ -33,7 +33,7 @@ der App, genau wie es der Browser tut:
 
 ## Starten
 
-**Brickfolio Live-Scanner** aus dem Programme-Ordner – siehe *Einbauen*
+**Nupplo Live-Scanner** aus dem Programme-Ordner – siehe *Einbauen*
 weiter unten. Die App bringt Python und Tk selbst mit.
 
 Aus dem Quelltext heraus, zum Entwickeln:
@@ -672,7 +672,7 @@ ein paar Sekunden durch und sagt am Ende, was durchgefallen ist.
 
 ## Lizenz
 
-MIT, wie Brickfolio selbst.
+MIT, wie Nupplo SE selbst.
 
 ## Neue Fassungen — der Scanner erneuert sich selbst
 
@@ -927,7 +927,7 @@ Die App ist für **Apple Silicon** gebaut (M1 und neuer). Auf Intel-Macs
 läuft sie nicht; dort startet man `livescan.py` von Hand.
 
 ### Beim ersten Start
-Der Scanner fragt nach der Adresse deiner Brickfolio-Instanz und einem
+Der Scanner fragt nach der Adresse deiner Nupplo-SE-Instanz und einem
 Token. Beides landet in `~/.brickfolio-livescan.json` – im Benutzerordner,
 nicht in der App. Ein Austausch der App lässt die Anmeldung also stehen.
 
