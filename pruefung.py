@@ -1727,20 +1727,57 @@ try:
     # Repo umbenannt: GitHub schiebt eine Stufe dazwischen. Ohne das
     # Mitgehen meldete der Scanner stillschweigend „du bist aktuell" —
     # für immer, ohne Fehler. Nachgestellt wie bei facebook/jest.
+    # Bewusst mit erfundenen Ordnernamen, nicht mit `livescan.REPO`: Sonst
+    # zeigt die Attrappe auf sich selbst, sobald der echte Ordner einmal
+    # umbenannt wurde - und der Test misst nur noch sich selbst.
+    _ALT_ORDNER = "Melle79/alter-ordner"
+    _NEU_ORDNER = "Melle79/neuer-ordner"
+
     def _seite_umbenannt(adresse, jetzt=""):
         _gefragt.append(adresse)
         if adresse == "https://github.com/%s/releases/latest" % livescan.REPO:
-            return 301, "https://github.com/Melle79/nupplo-livescan/releases/latest"
-        if adresse.endswith("/nupplo-livescan/releases/latest"):
-            return 302, "https://github.com/Melle79/nupplo-livescan/releases/tag/v9.9.9"
+            return 301, "https://github.com/%s/releases/latest" % _NEU_ORDNER
+        if adresse == "https://github.com/%s/releases/latest" % _NEU_ORDNER:
+            return 302, ("https://github.com/%s/releases/tag/v9.9.9"
+                         % _NEU_ORDNER)
         if "/releases/download/v9.9.9/" in adresse:
-            return 302, ""
+            # Wie GitHub es wirklich tut: weiter an den Ablageort.
+            return 302, "https://objects.githubusercontent.com/irgendwo"
         return 404, ""
 
     livescan.weiterleitung = _seite_umbenannt
     _umb = livescan.neuere_fassung("1.9.0")
     pruefe(_umb is not None and _umb[0] == "9.9.9",
            "nach einer Repo-Umbenennung wird die neue Fassung noch gefunden")
+
+    # **Der Fehler, der am 30.09.2026 draussen war.** Nach der Umbenennung
+    # des Ordners beantwortet GitHub auch die Adresse eines NICHT
+    # vorhandenen Pakets mit 301 auf den neuen Ordner. Wer das fuer „ist
+    # da" haelt, hoert beim ersten Namen auf zu suchen und laedt
+    # anschliessend eine 404 - der Rueckfall auf den alten Namen kaeme nie
+    # zum Zug.
+    _neuer, _alter = livescan.paket_namen()
+
+    def _paket_fehlt_hinter_umleitung(adresse, jetzt=""):
+        _gefragt.append(adresse)
+        if adresse.endswith("/releases/latest"):
+            return 302, ("https://github.com/%s/releases/tag/v9.9.9"
+                         % livescan.REPO)
+        if _neuer in adresse:
+            # Gibt es nicht - aber der Ordner wurde umbenannt.
+            if "/alter-ordner/" in adresse:
+                return 404, ""
+            return 301, ("https://github.com/Melle79/alter-ordner"
+                         "/releases/download/v9.9.9/" + _neuer)
+        if _alter in adresse:
+            return 302, "https://objects.githubusercontent.com/irgendwo"
+        return 404, ""
+
+    livescan.weiterleitung = _paket_fehlt_hinter_umleitung
+    _fall = livescan.neuere_fassung("1.9.0")
+    pruefe(_fall is not None and _fall[2].endswith(_alter),
+           "eine 301 auf ein fehlendes Paket gilt nicht als vorhanden")
+    livescan.weiterleitung = _seite
 
     def _endlos(adresse, jetzt=""):
         return 301, "https://github.com/Melle79/immer-weiter/releases/latest"
@@ -1754,7 +1791,6 @@ try:
     # der ALTE Name, muss die Selbsterneuerung ihn trotzdem finden. Ohne
     # diesen Rückfall bliebe jede bestehende Installation auf ihrer Fassung
     # sitzen, sobald die Pakete umbenannt sind.
-    _neuer, _alter = livescan.paket_namen()
     _nur_alter = [False]
 
     def _seite_nur_alter(adresse, jetzt=""):

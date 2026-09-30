@@ -126,6 +126,23 @@ fi
 echo "== Ans Release haengen =="
 gh release upload "$MARKE" "dist/$PAKET" --repo "$REPO" --clobber
 
+# **Beide Namen, und das ist keine Bequemlichkeit.** Fassungen bis 1.11.0
+# fragen zuerst nach dem Nupplo-Namen und halten dabei eine Weiterleitung
+# faelschlich fuer „Paket ist da" - nach der Umbenennung des Ordners
+# antwortet GitHub naemlich auch auf ein FEHLENDES Paket mit 301. Haengt
+# der zweite Name nicht dran, laden sie anschliessend eine 404 und der
+# Rueckfall auf den alten Namen kommt nie zum Zug.
+#
+# Der Fehler steckt in der jeweils anderen Seite und laesst sich dort
+# nicht mehr reparieren; hier kostet er zwei Zeilen. Faellt weg, wenn
+# niemand mehr auf 1.11.0 oder aelter sitzt.
+ZWEITNAME=$(echo "$PAKET" | sed 's/^Brickfolio-/Nupplo-/')
+if [ "$ZWEITNAME" != "$PAKET" ]; then
+    cp "dist/$PAKET" "dist/$ZWEITNAME"
+    gh release upload "$MARKE" "dist/$ZWEITNAME" --repo "$REPO" --clobber
+    echo "   auch als $ZWEITNAME"
+fi
+
 # **Nachsehen, nicht hoffen.** Was hochgeladen wurde, wird wieder geholt
 # und geprueft - genau so, wie der Scanner es spaeter holt. Ein Paket,
 # das unterwegs kaputtgeht, faellt hier auf und nicht beim Anwender.

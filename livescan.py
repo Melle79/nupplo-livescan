@@ -75,7 +75,7 @@ from tkinter import ttk
 
 # Steht auch im Info.plist des Bündels. setup.py liest sie von hier,
 # damit sie nicht an zwei Stellen auseinanderläuft; pruefung.py wacht darüber.
-VERSION = "1.11.0"
+VERSION = "1.11.1"
 
 # Auf welchem System laufen wir? Der Mac-Weg bleibt unangetastet; fuer
 # Windows stehen daneben eigene Zweige. Alles andere (Linux) faellt auf den
@@ -4596,7 +4596,7 @@ class LiveScanner:
                   "Liste")
 
 
-REPO = "Melle79/brickfolio-livescan"
+REPO = "Melle79/nupplo-livescan"
 
 
 def fassungszahlen(text: str) -> tuple:
@@ -4710,11 +4710,43 @@ def neueste_ueber_seite(jetzt: str = "") -> tuple | None:
     for name in paket_namen():
         paket = "https://github.com/%s/releases/download/%s/%s" % (
             REPO, kennung, name)
-        code, _ = weiterleitung(paket, jetzt)
-        if code in _WEITER or code == 200:
+        if _paket_da(paket, jetzt):
             gefunden = paket
             break
     return kennung, seite, gefunden
+
+def _paket_da(adresse: str, jetzt: str = "") -> bool:
+    """Hängt an dieser Adresse wirklich ein Paket?
+
+    **Eine Weiterleitung allein beweist gar nichts.** Genau daran ist der
+    Rückfall auf den alten Paketnamen einmal gescheitert: Nach der
+    Umbenennung des Projekt-Ordners beantwortet GitHub auch die Adresse
+    eines *nicht vorhandenen* Pakets mit 301 – der Weiterleitung auf den
+    neuen Ordner. Wer das für „ist da" hält, hört auf zu suchen und lädt
+    anschliessend eine 404.
+
+    Deshalb wird die Kette verfolgt, solange sie innerhalb von GitHub
+    bleibt. Zeigt sie am Ende auf den Ablageort der Dateien (ein anderer
+    Rechner), liegt das Paket wirklich dort. Geladen wird dabei nichts:
+    Bei der Weiterleitung auf den Ablageort wird abgebrochen, und das sind
+    die 22 MB, die hier niemand braucht.
+    """
+    for _ in range(4):
+        code, ziel = weiterleitung(adresse, jetzt)
+        if code == 200:
+            return True
+        if code not in _WEITER:
+            return False
+        if not ziel:
+            # Weiterleitung ohne Ziel: nicht verfolgbar, aber auch nicht der
+            # gefaehrliche Fall - die Umbenennung des Ordners nennt immer ein
+            # Ziel. Also gilt sie wie bisher als „Paket ist da".
+            return True
+        if "//github.com/" not in ziel and "//www.github.com/" not in ziel:
+            return True          # weitergereicht an den Ablageort
+        adresse = ziel
+    return False
+
 
 def paket_namen() -> tuple:
     """Wie das Paket für dieses System heißen kann – neuer Name zuerst.
