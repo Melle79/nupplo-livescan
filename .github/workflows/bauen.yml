@@ -185,8 +185,21 @@ jobs:
           name: Brickfolio-Live-Scanner-Windows-x64
           path: Brickfolio-Live-Scanner-Windows-x64.zip
 
+      # **Unter beiden Namen, und das ist kein Luxus.** Fassungen bis
+      # 1.11.0 fragen zuerst nach dem Nupplo-Namen und halten dabei eine
+      # Weiterleitung fälschlich für „Paket ist da" – nach der
+      # Umbenennung des Ordners antwortet GitHub nämlich auch auf ein
+      # FEHLENDES Paket mit 301. Hängt der zweite Name nicht dran, laden
+      # sie anschließend eine 404. Auf dem Mac erledigt das release.sh.
+      - name: Zweiter Name
+        run: >
+          Copy-Item "Brickfolio-Live-Scanner-Windows-x64.zip"
+          "Nupplo-Live-Scanner-Windows-x64.zip"
+
       - name: Ans Release hängen
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: Brickfolio-Live-Scanner-Windows-x64.zip
+          files: |
+            Brickfolio-Live-Scanner-Windows-x64.zip
+            Nupplo-Live-Scanner-Windows-x64.zip
