@@ -1724,6 +1724,32 @@ try:
            "und dem Paket für dieses System")
     pruefe(not any("api.github.com" in a for a in _gefragt),
            "die API wird nicht gefragt")
+    # Repo umbenannt: GitHub schiebt eine Stufe dazwischen. Ohne das
+    # Mitgehen meldete der Scanner stillschweigend „du bist aktuell" —
+    # für immer, ohne Fehler. Nachgestellt wie bei facebook/jest.
+    def _seite_umbenannt(adresse, jetzt=""):
+        _gefragt.append(adresse)
+        if adresse == "https://github.com/%s/releases/latest" % livescan.REPO:
+            return 301, "https://github.com/Melle79/nupplo-livescan/releases/latest"
+        if adresse.endswith("/nupplo-livescan/releases/latest"):
+            return 302, "https://github.com/Melle79/nupplo-livescan/releases/tag/v9.9.9"
+        if "/releases/download/v9.9.9/" in adresse:
+            return 302, ""
+        return 404, ""
+
+    livescan.weiterleitung = _seite_umbenannt
+    _umb = livescan.neuere_fassung("1.9.0")
+    pruefe(_umb is not None and _umb[0] == "9.9.9",
+           "nach einer Repo-Umbenennung wird die neue Fassung noch gefunden")
+
+    def _endlos(adresse, jetzt=""):
+        return 301, "https://github.com/Melle79/immer-weiter/releases/latest"
+
+    livescan.weiterleitung = _endlos
+    pruefe(livescan.neuere_fassung("1.9.0") is None,
+           "eine Weiterleitungsschleife endet, statt sich festzufressen")
+    livescan.weiterleitung = _seite
+
     # Die Umbenennung von Brickfolio auf Nupplo: Hängt am Release nur noch
     # der ALTE Name, muss die Selbsterneuerung ihn trotzdem finden. Ohne
     # diesen Rückfall bliebe jede bestehende Installation auf ihrer Fassung

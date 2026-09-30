@@ -4677,9 +4677,26 @@ def neueste_ueber_seite(jetzt: str = "") -> tuple | None:
     schon dranhängt, verrät die Download-Adresse: Weiterleitung heißt ja,
     404 heißt nein – dann bleibt das Paket leer wie bei der API.
     """
-    code, ziel = weiterleitung(
-        "https://github.com/%s/releases/latest" % REPO, jetzt)
-    if code not in _WEITER or "/releases/tag/" not in ziel:
+    # **Eine Umbenennung des Repos kostet eine Stufe mehr.** GitHub leitet
+    # `alt/releases/latest` zuerst auf `neu/releases/latest` um und erst von
+    # dort auf die Fassung. Wer nur eine Stufe liest, sieht ein Ziel ohne
+    # `/releases/tag/` und schliesst daraus „keine neue Fassung" - und zwar
+    # stillschweigend, ohne Fehler. Jede installierte Fassung bliebe fuer
+    # immer auf ihrem Stand, ohne dass es jemandem auffiele.
+    #
+    # Nachgemessen an einem echt umbenannten Repo (facebook/jest ->
+    # jestjs/jest): Stufe 1 antwortet 301 auf .../releases/latest, Stufe 2
+    # dann 302 auf .../releases/tag/<Fassung>.
+    ziel = "https://github.com/%s/releases/latest" % REPO
+    for _ in range(3):
+        code, ziel = weiterleitung(ziel, jetzt)
+        if code not in _WEITER or not ziel:
+            return None
+        if "/releases/tag/" in ziel:
+            break
+    else:
+        return None
+    if "/releases/tag/" not in ziel:
         return None
     kennung = urllib.parse.unquote(
         ziel.rsplit("/releases/tag/", 1)[1]).split("?")[0].split("#")[0]
